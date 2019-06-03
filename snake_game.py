@@ -48,14 +48,14 @@ class Snake:
     body = []
     turns = dict()
 
-    def __init__(self, color, pos):
+    def __init__(self, color, pos: (int, int)):
         self.color = color
         self.head = Cube(pos)
         self.body.append(self.head)
         self.dirnx = 0
         self.dirny = 1
 
-    def move(self, event):
+    def move(self):
 
         choices = {
             pygame.K_LEFT: (-1, 0),
@@ -63,36 +63,43 @@ class Snake:
             pygame.K_UP: (0, -1),
             pygame.K_DOWN: (0, 1),
         }
-        
-        pos = event.dict.get("key", None) if event.type == pygame.KEYDOWN else None
-        pos = choices.get(pos, None)
-        if pos is not None:
-            self.turns[self.head.pos[:]] = pos
 
-            for i, cube in enumerate(self.body):
-                position = cube.pos[:]
-                if position in self.turns:
-                    turn = self.turns[position]
-                    cube.move(turn[0], turn[1])
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return False
+            else:
+                pos = event.dict.get("key", None) if event.type == pygame.KEYDOWN else None
+                pos = choices.get(pos, None)
+                if pos is not None:
+                    self.turns[self.head.pos] = pos
 
-                    if i == len(self.body) - 1:
-                        self.turns.pop(position)
-                else:
-                    # Ensure we don't hit the end of the world
-                    if cube.dirnx == -1 and cube.pos[0] <= 0:
-                        cube.pos = (cube.rows-1, cube.pos[1])
+        for i, cube in enumerate(self.body):
+            print("Cube Position: ", cube.pos)
+            position = cube.pos[:]
+            if position in self.turns:
+                turn = self.turns[position]
+                print(turn)
+                cube.move(turn[0], turn[1])
+                print("Cube MOved!")
+                if i == len(self.body) - 1:
+                    self.turns.pop(position)
+            else:
+                # Ensure we don't hit the end of the world
+                if cube.dirnx == -1 and cube.pos[0] <= 0:
+                    cube.pos = (cube.rows-1, cube.pos[1])
 
-                    elif cube.dirnx == 1 and cube.pos[0] >= cube.rows-1:
-                        cube.pos = (0, cube.pos[1])
+                elif cube.dirnx == 1 and cube.pos[0] >= cube.rows-1:
+                    cube.pos = (0, cube.pos[1])
 
-                    elif cube.dirny == -1 and cube.pos[1] <= 0:
-                        cube.pos = (cube.pos[0], 0)
+                elif cube.dirny == -1 and cube.pos[1] <= 0:
+                    cube.pos = (cube.pos[0], 0)
 
-                    elif cube.dirny == 1 and cube.pos[1] <= cube.rows-1:
-                        cube.pos = (cube.pos[0], cube.rows-1)
+                elif cube.dirny == 1 and cube.pos[1] >= cube.rows-1:
+                    cube.pos = (cube.pos[0], cube.rows-1)
 
-                    else:
-                        cube.move(cube.dirnx, cube.dirny)
+                cube.move(cube.dirnx, cube.dirny)
+
+        return True
 
     def reset(self, pos):
         ...
@@ -119,7 +126,7 @@ class Snake:
                 cube.draw(surface)
 
 
-def draw_square_grid(surface, size: (int, int), rows: int) -> None:
+def draw_grid(surface, size: (int, int), rows: int) -> None:
     """
     Draw a generic grid based on the length/rows passed in.
 
@@ -129,16 +136,16 @@ def draw_square_grid(surface, size: (int, int), rows: int) -> None:
     :return: None
     """
 
-    length = size[0]
+    width, height = size
 
-    gap = length // rows
+    gap_w = width // rows
+    gap_h = height // rows
     x, y = 0, 0
-
-    for r in range(rows):
-        x += gap
-        y += gap
-        pygame.draw.line(surface, (255, 255, 255), (x, 0), (y, length))
-        pygame.draw.line(surface, (255, 255, 255), (0, x), (length, y))
+    for _ in range(rows):
+        x += gap_w
+        y += gap_h
+        pygame.draw.line(surface, (255, 255, 255), (x, 0), (x, height))
+        pygame.draw.line(surface, (255, 255, 255), (0, y), (width, y))
 
 
 def main():
@@ -150,9 +157,9 @@ def main():
     screen = pygame.display.set_mode(size)
     screen.fill(background_colour)
     pygame.display.set_caption('Snake Game')
-
+    clock = pygame.time.Clock()
     # Create initial board
-    draw_square_grid(screen, size, 20)
+    draw_grid(screen, size, 20)
 
     # Create a snake character
     snake = Snake((240, 0, 0), (0, 0))
@@ -160,15 +167,11 @@ def main():
     # Game Loop
     running = True
     while running:
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            else:
-                snake.move(event)
-                snake.draw(screen)
-                # pygame.display.flip()  # updates the entire surface
-                pygame.display.update()  # updates the entire surface (Or rect area passed in)
+        clock.tick(10)
+        running = snake.move()
+        snake.draw(screen)
+        # pygame.display.flip()  # updates the entire surface
+        pygame.display.update()  # updates the entire surface (Or rect area passed in)
 
 
 if __name__ == "__main__":
