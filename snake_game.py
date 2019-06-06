@@ -14,7 +14,6 @@ https://techwithtim.net/tutorials/game-development-with-python/snake-pygame/tuto
 
 """
 
-
 import pygame
 
 
@@ -31,6 +30,8 @@ class Cube:
     def move(self, dirnx, dirny):
         self.dirnx = dirnx
         self.dirny = dirny
+        print("Current Position: ", self.pos)
+
         self.pos = (self.pos[0] + self.dirnx, self.pos[1] + self.dirny)
 
     def draw(self, surface, eyes=False):
@@ -38,8 +39,8 @@ class Cube:
         row, col = self.pos
         pygame.draw.rect(surface,
                          self.color,
-                         (row * length+1,
-                          col * length+1,
+                         (row * length + 1,
+                          col * length + 1,
                           length - 2,
                           length - 2))
 
@@ -52,11 +53,17 @@ class Snake:
         self.color = color
         self.head = Cube(pos)
         self.body.append(self.head)
-        self.dirnx = 0
-        self.dirny = 1
+        self.dirnx = 1
+        self.dirny = 0
 
     def move(self):
+        """
+        Sets the current position of each cube of the snake body and then moves
+        each cube in the direction it should go.
+        :return:
+        """
 
+        # Keypresses that are interesting and their direction values.
         choices = {
             pygame.K_LEFT: (-1, 0),
             pygame.K_RIGHT: (1, 0),
@@ -74,22 +81,24 @@ class Snake:
                     self.turns[self.head.pos] = pos
 
         for i, cube in enumerate(self.body):
-            print("Cube Position: ", cube.pos)
+
             position = cube.pos[:]
             if position in self.turns:
                 turn = self.turns[position]
-                print(turn)
                 cube.move(turn[0], turn[1])
-                print("Cube MOved!")
+                print("Cube Moved!")
                 if i == len(self.body) - 1:
                     self.turns.pop(position)
             else:
                 # Ensure we don't hit the end of the world
                 if cube.dirnx == -1 and cube.pos[0] <= 0:
-                    cube.pos = (cube.rows-1, cube.pos[1])
+                    print("Left Wall")
+                    cube.pos = (cube.rows, cube.pos[1])
 
                 elif cube.dirnx == 1 and cube.pos[0] >= cube.rows-1:
-                    cube.pos = (0, cube.pos[1])
+                    print("Right Wall")
+
+                    cube.pos = (0-1, cube.pos[1])
 
                 elif cube.dirny == -1 and cube.pos[1] <= 0:
                     cube.pos = (cube.pos[0], 0)
@@ -120,10 +129,7 @@ class Snake:
 
     def draw(self, surface):
         for index, cube in enumerate(self.body):
-            if index == 0:
-                cube.draw(surface, True)
-            else:
-                cube.draw(surface)
+            cube.draw(surface, index == 0)
 
 
 def draw_grid(surface, size: (int, int), rows: int) -> None:
@@ -157,7 +163,10 @@ def main():
     screen = pygame.display.set_mode(size)
     screen.fill(background_colour)
     pygame.display.set_caption('Snake Game')
+
+    # Need a clock to control the tick's per second
     clock = pygame.time.Clock()
+
     # Create initial board
     draw_grid(screen, size, 20)
 
@@ -167,7 +176,8 @@ def main():
     # Game Loop
     running = True
     while running:
-        clock.tick(10)
+        clock.tick(4)  # 30 would be real time - slower < 30 > faster
+
         running = snake.move()
         snake.draw(screen)
         # pygame.display.flip()  # updates the entire surface
