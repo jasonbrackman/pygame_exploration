@@ -7,42 +7,52 @@ Looking at exploring Pygame library with regards to:
 
 
 Used the following resources:
--- The videos are OK, but I would not recommend this for people new to
-programming, it does raise a lot of questions about how Pygame works and
-it got me to start investigating things.
 https://techwithtim.net/tutorials/game-development-with-python/snake-pygame/tutorial-1/
 
 """
+import collections
+import random
 
 import pygame
+
+Facing = collections.namedtuple("facing", ("left", "right", "up", "down"))
+FACING = Facing(left=(-1, 0), right=(1, 0), up=(0, -1), down=(0, 1))
 
 
 class Cube:
     rows = 20
     width = 500
 
-    def __init__(self, start, dirnx=1, dirny=0, color=(255, 0, 0)):
-        self.pos = start
-        self.dirnx = dirnx
-        self.dirny = dirny
+    def __init__(
+        self,
+        start_pos: tuple,
+        direction: Facing = FACING.right,
+        color: tuple = (255, 0, 0),
+    ):
+        self.pos = start_pos
+        self.direction = direction
         self.color = color
 
-    def move(self, dirnx, dirny):
-        self.dirnx = dirnx
-        self.dirny = dirny
-        print("Current Position: ", self.pos)
-
-        self.pos = (self.pos[0] + self.dirnx, self.pos[1] + self.dirny)
+    def move(self, direction: Facing):
+        self.direction = direction
+        self.pos = (self.pos[0] + self.direction[0], self.pos[1] + self.direction[1])
 
     def draw(self, surface, eyes=False):
         length = self.width // self.rows
         row, col = self.pos
-        pygame.draw.rect(surface,
-                         self.color,
-                         (row * length + 1,
-                          col * length + 1,
-                          length - 2,
-                          length - 2))
+        pygame.draw.rect(
+            surface,
+            self.color,
+            (row * length + 1, col * length + 1, length - 2, length - 2),
+        )
+
+        if eyes:
+            centre = length // 2
+            radius = 3
+            eye_01 = (row * length + centre - radius, col * length + 8)
+            eye_02 = (row * length + centre + 8 - radius, col * length + 8)
+            pygame.draw.circle(surface, (0, 0, 0), eye_01, radius)
+            pygame.draw.circle(surface, (0, 0, 0), eye_02, radius)
 
 
 class Snake:
@@ -53,8 +63,7 @@ class Snake:
         self.color = color
         self.head = Cube(pos)
         self.body.append(self.head)
-        self.dirnx = 1
-        self.dirny = 0
+        self.direction = FACING.right
 
     def move(self):
         """
@@ -65,17 +74,21 @@ class Snake:
 
         # Keypresses that are interesting and their direction values.
         choices = {
-            pygame.K_LEFT: (-1, 0),
-            pygame.K_RIGHT: (1, 0),
-            pygame.K_UP: (0, -1),
-            pygame.K_DOWN: (0, 1),
+            pygame.K_LEFT: FACING.left,
+            pygame.K_RIGHT: FACING.right,
+            pygame.K_UP: FACING.up,
+            pygame.K_DOWN: FACING.down,
         }
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
             else:
-                pos = event.dict.get("key", None) if event.type == pygame.KEYDOWN else None
+                pos = (
+                    event.dict.get("key", None)
+                    if event.type == pygame.KEYDOWN
+                    else None
+                )
                 pos = choices.get(pos, None)
                 if pos is not None:
                     self.turns[self.head.pos] = pos
@@ -85,28 +98,30 @@ class Snake:
             position = cube.pos[:]
             if position in self.turns:
                 turn = self.turns[position]
-                cube.move(turn[0], turn[1])
-                print("Cube Moved!")
+                cube.move(turn)
+
                 if i == len(self.body) - 1:
                     self.turns.pop(position)
             else:
-                # Ensure we don't hit the end of the world
-                if cube.dirnx == -1 and cube.pos[0] <= 0:
-                    print("Left Wall")
+                # Ensure when we hit the edge of the world we wrap around to the other side
+                # x = left/right
+                # y = up/down
+
+                # Left Wall
+                if cube.direction == FACING.left and cube.pos[0] <= 0:
                     cube.pos = (cube.rows, cube.pos[1])
 
-                elif cube.dirnx == 1 and cube.pos[0] >= cube.rows-1:
-                    print("Right Wall")
+                # Right Wall
+                elif cube.direction == FACING.right and cube.pos[0] >= cube.rows - 1:
+                    cube.pos = (-1, cube.pos[1])
 
-                    cube.pos = (0-1, cube.pos[1])
+                elif cube.direction == FACING.up and cube.pos[1] <= 0:
+                    cube.pos = (cube.pos[0], cube.rows)
 
-                elif cube.dirny == -1 and cube.pos[1] <= 0:
-                    cube.pos = (cube.pos[0], 0)
-
-                elif cube.dirny == 1 and cube.pos[1] >= cube.rows-1:
-                    cube.pos = (cube.pos[0], cube.rows-1)
-
-                cube.move(cube.dirnx, cube.dirny)
+                elif cube.direction == FACING.down and cube.pos[1] >= cube.rows - 1:
+                    cube.pos = (cube.pos[0], -1)
+                # this needs to be updated to take FACING instead
+                cube.move(cube.direction)
 
         return True
 
@@ -117,7 +132,7 @@ class Snake:
         tail = self.body[-1]
 
         # get direction of tail cube
-        dx, dy = tail.dirnx, tail.dirny
+        dx, dy = tail.direction
 
         # Get old position -- and update it using the direction of movement
         new_pos = tail.pos
@@ -130,6 +145,24 @@ class Snake:
     def draw(self, surface):
         for index, cube in enumerate(self.body):
             cube.draw(surface, index == 0)
+
+    def add_tail(self):
+        tail = self.body[-1]
+
+        tail_pos = list(tail.pos)
+
+        if tail.direction == FACING.left:
+            tail_pos[0] += 1
+        elif tail.direction == FACING.right:
+            tail_pos[0] -= 1
+        elif tail.direction == FACING.up:
+            tail_pos[1] += 1
+        elif tail.direction == FACING.down:
+            tail_pos[1] -= 1
+
+        tail_pos = (tail_pos[0], tail_pos[1])
+        new_tail = Cube(tail_pos, tail.direction)
+        self.body.append(new_tail)
 
 
 def draw_grid(surface, size: (int, int), rows: int) -> None:
@@ -154,6 +187,20 @@ def draw_grid(surface, size: (int, int), rows: int) -> None:
         pygame.draw.line(surface, (255, 255, 255), (0, y), (width, y))
 
 
+def random_snack(rows, snake: Snake):
+    positions = [s.pos for s in snake.body]
+
+    while True:
+        x = random.randrange(rows)
+        y = random.randrange(rows)
+        if (x, y) in positions:
+            continue
+        else:
+            break
+
+    return x, y
+
+
 def main():
 
     size = (500, 500)
@@ -162,7 +209,7 @@ def main():
     # instantiate the rendering object (surface), BG colour, and title
     screen = pygame.display.set_mode(size)
     screen.fill(background_colour)
-    pygame.display.set_caption('Snake Game')
+    pygame.display.set_caption("Snake Game")
 
     # Need a clock to control the tick's per second
     clock = pygame.time.Clock()
@@ -172,14 +219,32 @@ def main():
 
     # Create a snake character
     snake = Snake((240, 0, 0), (0, 0))
+    snack = Cube(random_snack(20, snake), color=(10, 210, 10))
 
     # Game Loop
     running = True
     while running:
-        clock.tick(4)  # 30 would be real time - slower < 30 > faster
+        clock.tick(10)  # 30 would be real time - slower < 30 > faster
 
+        # clear and redraw entire grid (seems inefficient).
+        screen.fill(background_colour)
+        draw_grid(screen, size, 20)
+
+        # Update snake position
         running = snake.move()
+        # Check if head of snake eats the snack
+        if snake.body[0].pos == snack.pos:
+            snake.add_tail()
+            snack = Cube(random_snack(20, snake), color=(10, 210, 10))
+
+        positions = [s.pos for s in snake.body]
+        if len(positions) != len(set(positions)):
+            print(f"Your Snake length got to be {len(snake.body)} units long!")
+            print("Game Over!")
+
+            running = False
         snake.draw(screen)
+        snack.draw(screen)
         # pygame.display.flip()  # updates the entire surface
         pygame.display.update()  # updates the entire surface (Or rect area passed in)
 
