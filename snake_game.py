@@ -12,11 +12,17 @@ https://techwithtim.net/tutorials/game-development-with-python/snake-pygame/tuto
 """
 import collections
 import random
+import typing
 
 import pygame
 
 Facing = collections.namedtuple("facing", ("left", "right", "up", "down"))
 FACING = Facing(left=(-1, 0), right=(1, 0), up=(0, -1), down=(0, 1))
+
+
+class Position(typing.NamedTuple):
+    row: int
+    col: int
 
 
 class Cube:
@@ -25,7 +31,7 @@ class Cube:
 
     def __init__(
         self,
-        start_pos: tuple,
+        start_pos: Position,
         direction: Facing = FACING.right,
         color: tuple = (255, 0, 0),
     ):
@@ -35,22 +41,22 @@ class Cube:
 
     def move(self, direction: Facing):
         self.direction = direction
-        self.pos = (self.pos[0] + self.direction[0], self.pos[1] + self.direction[1])
+        self.pos = Position(self.pos.row + self.direction[0], self.pos.col + self.direction[1])
 
     def draw(self, surface, eyes=False):
         length = self.width // self.rows
-        row, col = self.pos
+
         pygame.draw.rect(
             surface,
             self.color,
-            (row * length + 1, col * length + 1, length - 2, length - 2),
+            (self.pos.row * length + 1, self.pos.col * length + 1, length - 2, length - 2),
         )
 
         if eyes:
             centre = length // 2
             radius = 3
-            eye_01 = (row * length + centre - radius, col * length + 8)
-            eye_02 = (row * length + centre + 8 - radius, col * length + 8)
+            eye_01 = (self.pos.row * length + centre - radius, self.pos.col * length + 8)
+            eye_02 = (self.pos.row * length + centre + 8 - radius, self.pos.col * length + 8)
             pygame.draw.circle(surface, (0, 0, 0), eye_01, radius)
             pygame.draw.circle(surface, (0, 0, 0), eye_02, radius)
 
@@ -95,7 +101,7 @@ class Snake:
 
         for i, cube in enumerate(self.body):
 
-            position = cube.pos[:]
+            position = cube.pos
             if position in self.turns:
                 turn = self.turns[position]
                 cube.move(turn)
@@ -109,17 +115,17 @@ class Snake:
 
                 # Left Wall
                 if cube.direction == FACING.left and cube.pos[0] <= 0:
-                    cube.pos = (cube.rows, cube.pos[1])
+                    cube.pos = Position(cube.rows, cube.pos[1])
 
                 # Right Wall
                 elif cube.direction == FACING.right and cube.pos[0] >= cube.rows - 1:
-                    cube.pos = (-1, cube.pos[1])
+                    cube.pos = Position(-1, cube.pos[1])
 
                 elif cube.direction == FACING.up and cube.pos[1] <= 0:
-                    cube.pos = (cube.pos[0], cube.rows)
+                    cube.pos = Position(cube.pos[0], cube.rows)
 
                 elif cube.direction == FACING.down and cube.pos[1] >= cube.rows - 1:
-                    cube.pos = (cube.pos[0], -1)
+                    cube.pos = Position(cube.pos[0], -1)
                 # this needs to be updated to take FACING instead
                 cube.move(cube.direction)
 
@@ -136,8 +142,8 @@ class Snake:
 
         # Get old position -- and update it using the direction of movement
         new_pos = tail.pos
-        new_pos[0] = 0 if dx == 0 else (new_pos[0] + -dx)
-        new_pos[1] = 0 if dy == 0 else (new_pos[1] + -dy)
+        new_pos.row = 0 if dx == 0 else (new_pos.row + -dx)
+        new_pos.col = 0 if dy == 0 else (new_pos.col + -dy)
 
         # add one more cube to the snake body trailing behind the
         self.body.append(Cube(new_pos))
@@ -160,7 +166,7 @@ class Snake:
         elif tail.direction == FACING.down:
             tail_pos[1] -= 1
 
-        tail_pos = (tail_pos[0], tail_pos[1])
+        tail_pos = Position(tail_pos[0], tail_pos[1])
         new_tail = Cube(tail_pos, tail.direction)
         self.body.append(new_tail)
 
@@ -187,7 +193,7 @@ def draw_grid(surface, size: (int, int), rows: int) -> None:
         pygame.draw.line(surface, (255, 255, 255), (0, y), (width, y))
 
 
-def random_snack(rows, snake: Snake):
+def random_snack(rows, snake: Snake) -> Position:
     positions = [s.pos for s in snake.body]
 
     while True:
@@ -198,7 +204,7 @@ def random_snack(rows, snake: Snake):
         else:
             break
 
-    return x, y
+    return Position(x, y)
 
 
 def main():
@@ -218,7 +224,7 @@ def main():
     draw_grid(screen, size, 20)
 
     # Create a snake character
-    snake = Snake((240, 0, 0), (0, 0))
+    snake = Snake((240, 0, 0), Position(0, 0))
     snack = Cube(random_snack(20, snake), color=(10, 210, 10))
 
     # Game Loop
