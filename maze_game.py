@@ -9,9 +9,13 @@ import pathfinding
 class Colour(tuple, enum.Enum):
     EMPTY = (5, 5, 5)
     BLOCKED = (127, 127, 127)
+    WALL = (200, 127, 127)
+    TOWER = (50, 250, 50)
+    SNACK = (187, 197, 255)
     START = (250, 5, 5)
     GOAL = (5, 5, 250)
-    PATH = (40, 200, 40)
+    ZOMBIE = (40, 200, 40)
+    LINE = (100, 100, 100)
 
 
 class Location(NamedTuple):
@@ -27,14 +31,62 @@ class Cube:
         self,
         pos: Location,
         color: Colour = Colour.EMPTY,
+        # rows: int = 20 * 5,
     ):
         self.pos = pos
         self.color = color
+        # self.rows = rows
 
     def draw(self, surface):
         length = self.width // self.rows
         # length = 10
         # print(self.pos.row, self.pos.col)
+        pygame.draw.rect(
+            surface,
+            self.color,
+            (self.pos.row * length + 1, self.pos.col * length + 1, length - 2, length - 2),
+        )
+
+
+class Tower(Cube):
+    def __init__(self, pos, color):
+        super(Cube, self).__init__()
+        self.pos = pos
+        self.color = color
+
+    def draw(self, surface):
+        length = self.width // self.rows
+
+        pygame.draw.rect(
+            surface,
+            self.color,
+            (self.pos.row * length + 1, self.pos.col * length + 1, length - 2, length - 2),
+        )
+
+
+class Snack(Cube):
+    def __init__(self, pos, color):
+        super(Cube, self).__init__()
+        self.pos = pos
+        self.color = color
+
+    def draw(self, surface):
+        length = self.width // self.rows
+        pygame.draw.rect(
+            surface,
+            self.color,
+            (self.pos.row * length + 1, self.pos.col * length + 1, length - 2, length - 2),
+        )
+
+
+class Zombie(Cube):
+    def __init__(self, pos, color):
+        super(Cube, self).__init__()
+        self.pos = pos
+        self.color = color
+
+    def draw(self, surface):
+        length = self.width // self.rows
         pygame.draw.rect(
             surface,
             self.color,
@@ -49,16 +101,19 @@ class Maze:
         self.rows, self.cols = self._get_rows_and_cols()
         self.start = Location(0, 0)
         self.goal = Location(10, 10)
-
+        self.zombies = []
         self.cells = self._randomly_fill()
 
-    def _randomly_fill(self, sparseness: float = 0.2) -> list:
+    def _randomly_fill(self, sparseness: float = 0.3) -> list:
         grid = [[Cube(Location(c, r), color=Colour.EMPTY) for c in range(self.cols)] for r in range(self.rows)]
 
         for row in range(self.rows):
             for col in range(self.cols):
                 if random.uniform(0, 1.0) < sparseness:
-                    grid[row][col].color = Colour.BLOCKED
+                    if random.randint(0, 5) == 5:
+                        grid[row][col].color = Colour.SNACK
+                    else:
+                        grid[row][col].color = Colour.BLOCKED
 
         # Setup the start and end of the maze points
         self.goal = Location(self.rows-1, self.cols-1)
@@ -87,13 +142,37 @@ class Maze:
         while x < width:
             x += self.cell_size
             y += self.cell_size
-            pygame.draw.line(surface, (255, 255, 255), (x, 0), (x, height))
-            pygame.draw.line(surface, (255, 255, 255), (0, y), (width, y))
+            pygame.draw.line(surface, Colour.LINE, (x, 0), (x, height))
+            pygame.draw.line(surface, Colour.LINE, (0, y), (width, y))
 
     def draw_cells(self, surface) -> None:
         for r in self.cells:
             for c in r:
                 c.draw(surface)
+
+    def _process_click_point(self, x, y):
+        x = x // self.cell_size  # gives the correct bucket for extremes -- but not middle
+        y = y // self.cell_size
+
+        return x, y
+
+    def click_create_wall(self, x, y) -> None:
+        x, y = self._process_click_point(x, y)
+
+        # note the x, y is reversed -- its a bug need to revisit.
+        self.cells[y][x].color = Colour.WALL
+
+    def click_create_tower(self, x, y) -> None:
+        x, y = self._process_click_point(x, y)
+        try:
+            for i in range(2):
+                c = Colour.TOWER if i != 0 else Colour.WALL
+                self.cells[y-i][x] = Tower(Location(x, y-i), c)
+                self.cells[y+i][x] = Tower(Location(x, y+i), c)
+                self.cells[y][x-i] = Tower(Location(x-i, y), c)
+                self.cells[y][x+i] = Tower(Location(x+i, y), c)
+        except Exception:
+            pass
 
     def goal_test(self, location: Location) -> bool:
         return location == self.goal
@@ -130,9 +209,10 @@ def manhattan_distance(goal: Location) -> Callable[[Location], float]:
 
 
 def main():
-
-    size = (500, 500)
-    cell_size = 25
+    tick_time = 15
+    size = (500, 500)  # can't change this yet without creating an issue with the board scale
+    cell_size = 20
+    Cube.rows = size[0] // cell_size
     background_colour = (20, 20, 20)
 
     # instantiate the rendering object (surface), BG colour, and title
@@ -148,44 +228,52 @@ def main():
     maze.draw_cells(screen)
 
     distance = manhattan_distance(maze.goal)
+
+    maze.zombies.append(Zombie(maze.start, Colour.ZOMBIE))
+
     solution = pathfinding.astar(maze.start, maze.goal_test, maze.successors, distance)
-    print(solution)
     cached_path = pathfinding.node_to_path(solution) if solution is not None else []
 
     # Game Loop
     running = True  # len(cached_path) > 0
-    # current = cached_path.pop(0)
+    current = None
+
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            if event.type == pygame.MOUSEMOTION:
+                (x, y) = pygame.mouse.get_pos()
+                maze.click_create_tower(x, y)
 
-        clock.tick(5)  # 30 would be real time - slower < 30 > faster
+        clock.tick(tick_time)  # 30 would be real time - slower < 30 > faster
+
+        _temp = current
+        if _temp is not None and maze.cells[_temp.row][_temp.col].color != Colour.BLOCKED:
+            maze.cells[_temp.row][_temp.col].color = Colour.EMPTY
+
         current = cached_path.pop(0)
 
         if maze.cells[current.row][current.col].color == Colour.EMPTY:
-            maze.cells[current.row][current.col].color = Colour.PATH
-        # if maze.cells[current.row][current.col].color != Colour.EMPTY:
-        #     # need to invalidate the cache and start again
-        #     print("wh?")
-        #     solution = pathfinding.astar(current, maze.goal_test, maze.successors, distance)
-        #     if solution is None:
-        #         print("No solution found using A*!")
-        #     else:
-        #         cached_path = pathfinding.node_to_path(solution)
-        #         if len(cached_path) > 1:
-        #
-        #             past = cached_path[0]
-        #             maze.cells[past.row][past.col].color = Colour.EMPTY
-        #
-        #             move = cached_path[1]
-        #             maze.start = move
-        #             maze.cells[move.row][move.col].color = Colour.PATH
+            maze.cells[current.row][current.col].color = Colour.ZOMBIE
+
+        elif maze.cells[current.row][current.col].color != Colour.EMPTY:
+            # need to invalidate the cache and start again
+            if _temp is not None:
+                # maze.cells[_temp.row][_temp.col].color = Colour.PATH
+                maze.cells[current.row][current.col].color = Colour.BLOCKED
+                solution = pathfinding.astar(_temp, maze.goal_test, maze.successors, distance)
+            else:
+                solution = pathfinding.astar(current, maze.goal_test, maze.successors, distance)
+
+            if solution is None:
+                print("No solution found using A*!")
+                break
+            else:
+                # print("Problem: Recalculating!")
+                cached_path = pathfinding.node_to_path(solution)
 
         maze.draw_cells(screen)
-        # clear and redraw entire grid (seems inefficient).
-        # screen.fill(background_colour)
-
         pygame.display.update()
 
 
