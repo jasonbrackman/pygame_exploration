@@ -5,6 +5,8 @@ from typing import NamedTuple, Callable, List
 import pygame
 import pathfinding
 
+# __ Building Blocks __
+
 
 class Colour(tuple, enum.Enum):
     EMPTY = (5, 5, 5)
@@ -16,11 +18,14 @@ class Colour(tuple, enum.Enum):
     GOAL = (5, 5, 250)
     ZOMBIE = (40, 200, 40)
     LINE = (100, 100, 100)
+    BULLET = (0, 0, 255)
 
 
 class Location(NamedTuple):
     row: int
     col: int
+
+# __ Characters __
 
 
 class Cube:
@@ -53,15 +58,33 @@ class Tower(Cube):
         super(Cube, self).__init__()
         self.pos = pos
         self.color = color
+        self.bullets = []
+
+    def shoot(self, surface):
+        # Scan 5 spaced away for target
+        # if found start shooting at target
+        print(len(self.bullets))
+        if len(self.bullets) == 0:
+            bullet = Bullet(self.pos, Colour.BULLET)
+            self.bullets.append(bullet)
+
+        for bullet in self.bullets:
+            bullet.move(surface)
+            # if bullet.life == 0:
+            #     self.bullets.remove(bullet)
 
     def draw(self, surface):
-        length = self.width // self.rows
 
+        length = self.width // self.rows
         pygame.draw.rect(
             surface,
             self.color,
             (self.pos.row * length + 1, self.pos.col * length + 1, length - 2, length - 2),
         )
+
+        # only shoot from center of tower
+        if self.color == Colour.TOWER:
+            self.shoot(surface)
 
 
 class Snack(Cube):
@@ -166,7 +189,7 @@ class Maze:
         x, y = self._process_click_point(x, y)
         try:
             for i in range(2):
-                c = Colour.TOWER if i != 0 else Colour.WALL
+                c = Colour.TOWER if i == 0 else Colour.WALL
                 self.cells[y-i][x] = Tower(Location(x, y-i), c)
                 self.cells[y+i][x] = Tower(Location(x, y+i), c)
                 self.cells[y][x-i] = Tower(Location(x-i, y), c)
@@ -199,6 +222,31 @@ class Maze:
         return successors
 
 
+# __ Gameplay __
+class Bullet(Cube):
+    def __init__(self, pos, color):
+        super(Cube, self).__init__()
+        self.pos = pos
+        self.color = color
+        self.life = 10
+
+    def draw(self, surface):
+        length = self.width // self.rows
+        pygame.draw.rect(
+            surface,
+            self.color,
+            (self.pos.row * length + 1,
+             self.pos.col * length + 1,
+             length - 2,
+             length - 2),
+        )
+
+    def move(self, surface):
+        self.life -= 1
+        self.pos = Location(self.pos.row + 0.5, self.pos.col + 0.5)
+        self.draw(surface)
+
+
 def manhattan_distance(goal: Location) -> Callable[[Location], float]:
     def distance(ml: Location) -> float:
         xdist: int = abs(ml.col - goal.col)
@@ -209,9 +257,9 @@ def manhattan_distance(goal: Location) -> Callable[[Location], float]:
 
 
 def main():
-    tick_time = 15
+    tick_time = 5
     size = (500, 500)  # can't change this yet without creating an issue with the board scale
-    cell_size = 20
+    cell_size = 10
     Cube.rows = size[0] // cell_size
     background_colour = (20, 20, 20)
 
@@ -239,12 +287,17 @@ def main():
     current = None
 
     while running:
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            if event.type == pygame.MOUSEMOTION:
-                (x, y) = pygame.mouse.get_pos()
-                maze.click_create_tower(x, y)
+                break
+
+        # Check for a left mouse click down
+        mouse_pressed = pygame.mouse.get_pressed()
+        if mouse_pressed == (1, 0, 0):
+            (x, y) = pygame.mouse.get_pos()
+            maze.click_create_tower(x, y)
 
         clock.tick(tick_time)  # 30 would be real time - slower < 30 > faster
 
