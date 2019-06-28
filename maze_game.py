@@ -63,15 +63,14 @@ class Tower(Cube):
     def shoot(self, surface):
         # Scan 5 spaced away for target
         # if found start shooting at target
-        print(len(self.bullets))
         if len(self.bullets) == 0:
             bullet = Bullet(self.pos, Colour.BULLET)
             self.bullets.append(bullet)
 
         for bullet in self.bullets:
             bullet.move(surface)
-            # if bullet.life == 0:
-            #     self.bullets.remove(bullet)
+            if bullet.life == 0:
+                self.bullets.remove(bullet)
 
     def draw(self, surface):
 
@@ -221,8 +220,9 @@ class Maze:
 
         return successors
 
-
 # __ Gameplay __
+
+
 class Bullet(Cube):
     def __init__(self, pos, color):
         super(Cube, self).__init__()
@@ -257,7 +257,7 @@ def manhattan_distance(goal: Location) -> Callable[[Location], float]:
 
 
 def main():
-    tick_time = 5
+    tick_time = 10
     size = (500, 500)  # can't change this yet without creating an issue with the board scale
     cell_size = 10
     Cube.rows = size[0] // cell_size
@@ -272,9 +272,6 @@ def main():
     # Create Maze
     maze = Maze(size, cell_size)
 
-    maze.draw_grid(screen)
-    maze.draw_cells(screen)
-
     distance = manhattan_distance(maze.goal)
 
     maze.zombies.append(Zombie(maze.start, Colour.ZOMBIE))
@@ -287,7 +284,9 @@ def main():
     current = None
 
     while running:
-
+        screen.fill(background_colour)
+        maze.draw_grid(screen)
+        maze.draw_cells(screen)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
